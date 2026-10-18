@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: qr-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   portable:
     strategy:
@@ -18,9 +22,13 @@ jobs:
         include:
           - os: windows-latest
             platform: windows-x64
+            rustflags: '-C target-feature=+crt-static'
           - os: ubuntu-24.04
             platform: ubuntu24-x64
+            rustflags: ''
     runs-on: ${{ matrix.os }}
+    env:
+      RUSTFLAGS: ${{ matrix.rustflags }}
     steps:
       - uses: actions/checkout@v6
       - name: Install Rust toolchain
