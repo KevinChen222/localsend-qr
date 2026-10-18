@@ -392,7 +392,7 @@ mod tests {
                 .await?
                 .status()
                 .as_u16(),
-            403
+            404
         );
         let port = running.server.port();
         let _ = running.stop.send(());
