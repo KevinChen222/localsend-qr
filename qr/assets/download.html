@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>LocalSend QR · 接收文件</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f7f6;color:#173a35;font:16px system-ui,sans-serif;min-height:100vh;display:grid;place-items:center;padding:24px}main{width:min(100%,460px);padding:32px;background:white;border:1px solid #dbe7e4;border-radius:24px;box-shadow:0 18px 60px #163b3410}small{color:#54726c}h1{font-size:28px;letter-spacing:-1px}p{line-height:1.7;overflow-wrap:anywhere}a{display:block;text-align:center;background:#176a57;color:white;padding:16px;border-radius:12px;text-decoration:none;font-weight:650;margin:24px 0}a:focus-visible{outline:3px solid #34b896;outline-offset:4px}.muted{color:#647a75;font-size:14px}#name{font-weight:650}footer{margin-top:28px;padding-top:20px;border-top:1px solid #e8efed;font-size:13px;color:#647a75}
+</style></head><body><main><small>LOCALSEND QR · 局域网传送</small><h1>文件已为你准备好</h1>
+<p id="status" role="status">正在连接电脑…</p><p id="name"></p><div id="action"></div>
+<p class="muted">无需安装 App。请保持电脑的分享窗口开启，并使用 Safari、Chrome 等系统浏览器打开链接。</p>
+<footer>文件直接从电脑传到手机 · HTTP 未加密<br>文件夹以 ZIP 下载，保存后解压即可。</footer></main>
+<script>
+'use strict';
+(async function () {
+ const status = document.getElementById('status');
+ try {
+  const key = new URLSearchParams(location.hash.slice(1)).get('key');
+  if (!key) throw new Error('链接缺少分享凭证，请重新扫描电脑上的二维码。');
+  const response = await fetch('/api/localsend/v2/prepare-download?pin=' + encodeURIComponent(key), {method:'POST', cache:'no-store'});
+  if (!response.ok) throw new Error('分享链接已失效或凭证不正确，请重新扫码。');
+  const data = await response.json();
+  const entries = Object.entries(data.files || {});
+  if (entries.length !== 1) throw new Error('没有可下载的文件。');
+  const [id, file] = entries[0];
+  document.getElementById('name').textContent = file.fileName;
+  status.textContent = '连接成功 · ' + (file.size / 1048576).toFixed(2) + ' MB';
+  const link = document.createElement('a');
+  link.href = '/api/localsend/v2/download?sessionId=' + encodeURIComponent(data.sessionId) + '&fileId=' + encodeURIComponent(id);
+  link.textContent = '下载文件'; link.setAttribute('download', file.fileName);
+  document.getElementById('action').appendChild(link);
+ } catch (error) { status.textContent = error.message || '连接失败，请检查局域网连接。'; }
+})();
+</script></body></html>

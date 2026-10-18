@@ -1,0 +1,95 @@
+name: QR portable builds
+on:
+  push:
+    branches: [main]
+    tags: ['qr-v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x64
+          - os: ubuntu-24.04
+            platform: ubuntu24-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust toolchain
+        run: rustup toolchain install --profile minimal --component rustfmt --component clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: qr-${{ matrix.platform }}
+      - name: Format QR crate
+        run: cargo fmt --package localsend-qr --check
+      - name: Check QR crate
+        run: cargo clippy --package localsend-qr --all-targets -- -D warnings
+      - name: Test QR sharing and archive handling
+        run: cargo test --package localsend-qr
+      - name: Test LocalSend browser protocol
+        run: cargo test --package localsend --features full --test v2_web_download
+      - name: Build portable executable
+        run: cargo build --release --package localsend-qr
+      - name: Package
+        run: python qr/pack.py ${{ matrix.platform }}
+      - name: End-to-end CLI smoke test
+        run: python qr/smoke.py
+      - uses: actions/upload-artifact@v7
+        with:
+          name: qr-${{ matrix.platform }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: matrix.platform == 'ubuntu24-x64'
+        with:
+          name: qr-cargo-lock
+          path: Cargo.lock
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/qr-v')
+    needs: portable
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: qr-*-x64
+          path: bundles
+          merge-multiple: true
+      - name: Publish exactly two portable bundles
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          test "$(find bundles -maxdepth 1 -type f | wc -l)" -eq 2
+          sha256sum bundles/* > checksums.txt
+          cat > notes.md <<'NOTES'
+          基于 LocalSend Rust 核心的二维码传送便携版。
+
+          - Windows 11 x64：下载 windows-x64.zip，解压后运行 Register-ContextMenu.ps1；右键 → 显示更多选项 → 通过二维码传送。
+          - Ubuntu 24 x64：下载 ubuntu24-x64.tar.gz，解压后运行 bash register-context-menu.sh；GNOME Files 右键 → 脚本 → 通过二维码传送。
+          - 手机无需安装 App，扫码后在系统浏览器点击下载。文件夹以 ZIP 接收。
+          - 移动便携目录后重新运行注册脚本更新路径。Ctrl+C 停止分享。
+          - HTTP 未加密；限可信局域网使用。默认分享 60 分钟，--expires 0 可取消时限。
+          - Windows 包未进行代码签名。Ubuntu 包在 Ubuntu 24.04 CI 构建和测试；请在实际双系统及手机上验证网络连通性。
+
+          包内含脚本、说明、许可证、配置与 SHA256SUMS.json。
+
+          构建包 SHA-256：
+          ```
+          NOTES
+          cat checksums.txt >> notes.md
+          printf '\n```\n' >> notes.md
+          gh release create "$GITHUB_REF_NAME" bundles/* --title "LocalSend QR ${GITHUB_REF_NAME#qr-v}" --notes-file notes.md --latest

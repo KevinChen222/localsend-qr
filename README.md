@@ -1,4 +1,39 @@
-# LocalSend
+# LocalSend QR — 便携二维码传送
+
+基于 LocalSend Rust 核心的独立扩展。电脑选中文件/文件夹，右键启动终端二维码；
+手机扫码后在浏览器下载，无需安装 LocalSend。
+
+- **Windows 11 x64**：解压便携 ZIP，运行 `Register-ContextMenu.ps1`。
+  右键单个文件或文件夹 → 显示更多选项 → 通过二维码传送。
+- **Ubuntu 24 x64**：解压便携 tar.gz，运行 `bash register-context-menu.sh`。
+  GNOME Files / Nautilus 中右键 → 脚本 → 通过二维码传送。
+- 移动目录后重新运行注册脚本即可更新调用路径；两个平台均提供移除脚本。
+- 单文件直接传输；文件夹和多项打为 ZIP（保留空目录，支持 ZIP64）。
+- 分享使用每次随机凭证，默认 60 分钟过期，Ctrl+C 停止。HTTP 未加密，仅限可信局域网。
+- 手机需要点下载，保存位置由浏览器决定。电脑与手机的防火墙、Wi-Fi 隔离可能影响连接。
+
+[下载便携包](https://github.com/KevinChen222/localsend-qr/releases/latest) ·
+[完整使用说明](qr/portable/README.txt)
+
+```text
+localsend-qr share -- FILE_OR_FOLDER
+localsend-qr share --port 0 --expires 0 -- FILE1 FILE2 FOLDER
+localsend-qr share --ip 192.168.1.20 -- FILE
+```
+
+配置文件 `settings.json` 放在核心 EXE/二进制旁。右键注册只为当前用户生效，
+Windows 防火墙设置另由可选脚本管理。程序本体无需安装 Rust、Flutter 或 Python。
+Ubuntu 桌面集成需要系统自带的 GNOME Terminal。
+
+开发：`cargo test -p localsend-qr`，`cargo build --release -p localsend-qr`。
+源代码位于 `qr/`，复用 `packages/core`。发布工作流仅生成 Windows x64 和 Ubuntu 24 x64
+两种便携包；上游工作流保存在 `support/upstream-workflows/`。
+
+此项目是独立 fork，并非官方 LocalSend 发行版。沿用 Apache-2.0 许可证。
+
+---
+
+# LocalSend（上游说明）
 
 [![CI status][ci-badge]][ci-workflow]
 [![Translations][translate-badge]][translate-link]

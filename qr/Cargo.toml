@@ -1,0 +1,19 @@
+[package]
+name = "localsend-qr"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "Portable QR sharing using the LocalSend Rust core"
+
+[dependencies]
+localsend = { path = "../packages/core", features = ["full"] }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+qrcode = { version = "0.14", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
+walkdir = "2"
+zip = { version = "2", default-features = false }

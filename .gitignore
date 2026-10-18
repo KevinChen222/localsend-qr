@@ -1,4 +1,6 @@
 .idea
+/.tools/
+/dist/
 
 # Pub workspace resolution output
 /.dart_tool/
