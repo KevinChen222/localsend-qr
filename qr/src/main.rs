@@ -361,12 +361,13 @@ mod tests {
         let files = response["files"].as_object().unwrap();
         assert_eq!(files.len(), 1);
         let id = files.keys().next().unwrap();
-        let response = client
-            .get(format!("{base}/api/localsend/v2/download"))
-            .query(&[("sessionId", session), ("fileId", id)])
-            .send()
-            .await?
-            .error_for_status()?;
+        let mut download_url =
+            localsend::reqwest::Url::parse(&format!("{base}/api/localsend/v2/download"))?;
+        download_url
+            .query_pairs_mut()
+            .append_pair("sessionId", session)
+            .append_pair("fileId", id);
+        let response = client.get(download_url).send().await?.error_for_status()?;
         assert!(
             response.headers()["content-disposition"]
                 .to_str()?
