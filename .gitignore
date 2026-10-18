@@ -1,6 +1,7 @@
 .idea
 /.tools/
 /dist/
+__pycache__/
 
 # Pub workspace resolution output
 /.dart_tool/

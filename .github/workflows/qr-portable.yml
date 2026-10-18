@@ -24,24 +24,30 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install Rust toolchain
-        run: rustup toolchain install --profile minimal --component rustfmt --component clippy
+        run: rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
       - uses: Swatinem/rust-cache@v2
         with:
           key: qr-${{ matrix.platform }}
       - name: Format QR crate
         run: cargo fmt --package localsend-qr --check
       - name: Check QR crate
-        run: cargo clippy --package localsend-qr --all-targets -- -D warnings
+        run: cargo clippy --locked --package localsend-qr --all-targets -- -D warnings
       - name: Test QR sharing and archive handling
-        run: cargo test --package localsend-qr
+        run: cargo test --locked --package localsend-qr
       - name: Test LocalSend browser protocol
-        run: cargo test --package localsend --features full --test v2_web_download
+        run: cargo test --locked --package localsend --features full --test v2_web_download
       - name: Build portable executable
-        run: cargo build --release --package localsend-qr
+        run: cargo build --locked --release --package localsend-qr
       - name: Package
         run: python qr/pack.py ${{ matrix.platform }}
       - name: End-to-end CLI smoke test
         run: python qr/smoke.py
+      - name: Windows right-click integration and relocation
+        if: matrix.platform == 'windows-x64'
+        run: powershell.exe -NoLogo -NoProfile -NonInteractive -File qr/test-windows-integration.ps1
+      - name: Ubuntu Nautilus integration and relocation
+        if: matrix.platform == 'ubuntu24-x64'
+        run: python qr/test-linux-integration.py
       - uses: actions/upload-artifact@v7
         with:
           name: qr-${{ matrix.platform }}
