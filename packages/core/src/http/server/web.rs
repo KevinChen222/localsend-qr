@@ -450,6 +450,9 @@ pub(crate) async fn download(
     // The file name may be inside directories.
     let file_name = file.file_name.replace('/', "-");
     let encoded_file_name = utf8_percent_encode(&file_name, FILE_NAME_ENCODE_SET);
+    // RFC 8187 preserves Unicode names in browsers that do not decode the
+    // percent escapes in the legacy filename parameter (notably Safari).
+    let utf8_file_name = utf8_percent_encode(&file_name, NON_ALPHANUMERIC);
 
     let mut response = Response::new(body);
     let headers = response.headers_mut();
@@ -459,7 +462,9 @@ pub(crate) async fn download(
     );
     headers.insert(
         http::header::CONTENT_DISPOSITION,
-        http::HeaderValue::from_str(&format!("attachment; filename=\"{encoded_file_name}\""))
+        http::HeaderValue::from_str(&format!(
+            "attachment; filename=\"{encoded_file_name}\"; filename*=UTF-8''{utf8_file_name}"
+        ))
             .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?,
     );
     headers.insert(http::header::CONTENT_LENGTH, http::HeaderValue::from(size));

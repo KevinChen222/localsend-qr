@@ -28,10 +28,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: qr-${{ matrix.platform }}
+          cache-on-failure: true
       - name: Format QR crate
         run: cargo fmt --package localsend-qr --check
       - name: Check QR crate
-        run: cargo clippy --locked --package localsend-qr --all-targets -- -D warnings
+        run: cargo clippy --locked --package localsend-qr --no-deps --all-targets -- -D warnings
       - name: Test QR sharing and archive handling
         run: cargo test --locked --package localsend-qr
       - name: Test LocalSend browser protocol

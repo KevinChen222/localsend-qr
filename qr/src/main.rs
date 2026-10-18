@@ -11,7 +11,7 @@ use localsend::model::transfer::{FileContent, FileDto};
 use qrcode::{QrCode, render::unicode};
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -54,6 +54,33 @@ struct Settings {
     port: Option<u16>,
     ip: Option<Ipv4Addr>,
     expires_minutes: Option<u32>,
+}
+
+fn qr_colors_enabled() -> bool {
+    if !io::stdout().is_terminal() {
+        return false;
+    }
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Console::{
+            ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode, GetStdHandle, STD_OUTPUT_HANDLE,
+            SetConsoleMode,
+        };
+        // SAFETY: the standard output handle is borrowed, and mode points to
+        // initialized writable storage. No handle ownership is transferred.
+        unsafe {
+            let handle = GetStdHandle(STD_OUTPUT_HANDLE);
+            let mut mode = 0;
+            if GetConsoleMode(handle, &mut mode) == 0 {
+                return false;
+            }
+            SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        true
+    }
 }
 
 fn settings() -> Result<Settings> {
@@ -248,10 +275,14 @@ async fn share(paths: Vec<PathBuf>, port: u16, ip: Option<Ipv4Addr>, expires: u3
         .render::<unicode::Dense1x2>()
         .quiet_zone(true)
         .build();
-    let qr = format!(
-        "\x1b[30;107m{}\x1b[0m",
-        qr.replace('\n', "\x1b[0m\n\x1b[30;107m")
-    );
+    let qr = if qr_colors_enabled() {
+        format!(
+            "\x1b[30;107m{}\x1b[0m",
+            qr.replace('\n', "\x1b[0m\n\x1b[30;107m")
+        )
+    } else {
+        qr
+    };
     let display_name: String = file
         .name
         .chars()
@@ -336,6 +367,11 @@ mod tests {
             .send()
             .await?
             .error_for_status()?;
+        assert!(
+            response.headers()["content-disposition"]
+                .to_str()?
+                .contains("filename*=UTF-8''%E4%B8%AD%E6%96%87%20test%2Etxt")
+        );
         assert_eq!(response.bytes().await?.as_ref(), b"real file contents\0");
         assert_eq!(
             client

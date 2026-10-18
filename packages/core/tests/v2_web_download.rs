@@ -444,7 +444,7 @@ async fn test_full_download_flow() {
     );
     assert_eq!(
         download_response.headers()["content-disposition"],
-        "attachment; filename=\"dir-data.bin\""
+        "attachment; filename=\"dir-data.bin\"; filename*=UTF-8''dir%2Ddata%2Ebin"
     );
     assert_eq!(
         download_response.bytes().await.unwrap().as_ref(),
