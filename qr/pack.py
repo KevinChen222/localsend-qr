@@ -6,13 +6,14 @@ import os
 from pathlib import Path
 import shutil
 import tarfile
+import tomllib
 import zipfile
 
 parser = argparse.ArgumentParser()
 parser.add_argument("platform", choices=["windows-x64", "ubuntu24-x64"])
 args = parser.parse_args()
 root = Path(__file__).resolve().parent.parent
-version = "0.1.0"
+version = tomllib.loads((root / "qr/Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
 name = f"LocalSendQR-{version}-{args.platform}"
 out = root / "dist"
 folder = out / name
@@ -28,6 +29,8 @@ for notice in [root / "NOTICE", root / "NOTICE.txt"]:
     if notice.exists():
         shutil.copy2(notice, folder / notice.name)
 if windows:
+    for source in folder.glob("*.cmd"):
+        source.write_text(source.read_text(encoding="ascii"), encoding="ascii", newline="\r\n")
     # PowerShell 5.1 needs a BOM to read non-ASCII script source reliably.
     for source in folder.glob("*.ps1"):
         source.write_text(source.read_text(encoding="utf-8"), encoding="utf-8-sig", newline="\r\n")

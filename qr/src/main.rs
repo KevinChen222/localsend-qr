@@ -1,4 +1,6 @@
 mod archive;
+#[cfg(windows)]
+mod context_menu;
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
@@ -29,6 +31,12 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Install or remove the current-user Explorer menu without PowerShell
+    #[cfg(windows)]
+    ContextMenu {
+        #[command(subcommand)]
+        action: ContextMenuAction,
+    },
     /// Share a file, a folder (ZIP), or multiple items (one ZIP)
     Share {
         #[arg(required = true, num_args = 1..)]
@@ -46,6 +54,18 @@ enum Command {
         #[arg(long)]
         pause_on_error: bool,
     },
+}
+
+#[cfg(windows)]
+#[derive(Subcommand)]
+enum ContextMenuAction {
+    /// Register the portable executable at its current location
+    Install {
+        #[arg(long)]
+        core_path: Option<PathBuf>,
+    },
+    /// Remove only the LocalSend QR file and folder menu entries
+    Remove,
 }
 
 #[derive(Default, Deserialize)]
@@ -98,30 +118,39 @@ fn settings() -> Result<Settings> {
 }
 
 fn main() {
-    let Args {
-        command:
-            Command::Share {
-                paths,
-                port,
-                ip,
-                expires,
-                pause_on_error,
+    let (pause_on_error, result) = match Args::parse().command {
+        Command::Share {
+            paths,
+            port,
+            ip,
+            expires,
+            pause_on_error,
+        } => (
+            pause_on_error,
+            tokio::runtime::Runtime::new()
+                .context("Cannot start runtime")
+                .and_then(|runtime| {
+                    runtime.block_on(async {
+                        let config = settings()?;
+                        share(
+                            paths,
+                            port.or(config.port).unwrap_or(53318),
+                            ip.or(config.ip),
+                            expires.or(config.expires_minutes).unwrap_or(60),
+                        )
+                        .await
+                    })
+                }),
+        ),
+        #[cfg(windows)]
+        Command::ContextMenu { action } => (
+            false,
+            match action {
+                ContextMenuAction::Install { core_path } => context_menu::install(core_path),
+                ContextMenuAction::Remove => context_menu::remove(),
             },
-    } = Args::parse();
-    let result = tokio::runtime::Runtime::new()
-        .context("Cannot start runtime")
-        .and_then(|runtime| {
-            runtime.block_on(async {
-                let config = settings()?;
-                share(
-                    paths,
-                    port.or(config.port).unwrap_or(53318),
-                    ip.or(config.ip),
-                    expires.or(config.expires_minutes).unwrap_or(60),
-                )
-                .await
-            })
-        });
+        ),
+    };
     if let Err(error) = result {
         eprintln!("\nError: {error:#}");
         if pause_on_error {

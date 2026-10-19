@@ -93,7 +93,7 @@ jobs:
           cat > notes.md <<'NOTES'
           基于 LocalSend Rust 核心的二维码传送便携版。
 
-          - Windows 11 x64：下载 windows-x64.zip，解压后运行 Register-ContextMenu.ps1；右键 → 显示更多选项 → 通过二维码传送。
+          - Windows 11 x64：下载 windows-x64.zip，解压后双击 Register-ContextMenu.cmd，无需更改 PowerShell 执行策略；右键 → 显示更多选项 → 通过二维码传送。
           - Ubuntu 24 x64：下载 ubuntu24-x64.tar.gz，解压后运行 bash register-context-menu.sh；GNOME Files 右键 → 脚本 → 通过二维码传送。
           - 手机无需安装 App，扫码后在系统浏览器点击下载。文件夹以 ZIP 接收。
           - 移动便携目录后重新运行注册脚本更新路径。Ctrl+C 停止分享。

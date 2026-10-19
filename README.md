@@ -3,7 +3,7 @@
 基于 LocalSend Rust 核心的独立扩展。电脑选中文件/文件夹，右键启动终端二维码；
 手机扫码后在浏览器下载，无需安装 LocalSend。
 
-- **Windows 11 x64**：解压便携 ZIP，运行 `Register-ContextMenu.ps1`。
+- **Windows 11 x64**：解压便携 ZIP，双击 `Register-ContextMenu.cmd`，无需修改 PowerShell 执行策略。
   右键单个文件或文件夹 → 显示更多选项 → 通过二维码传送。
 - **Ubuntu 24 x64**：解压便携 tar.gz，运行 `bash register-context-menu.sh`。
   GNOME Files / Nautilus 中右键 → 脚本 → 通过二维码传送。
@@ -23,6 +23,8 @@ localsend-qr share --ip 192.168.1.20 -- FILE
 
 配置文件 `settings.json` 放在核心 EXE/二进制旁。右键注册只为当前用户生效，
 Windows 防火墙设置另由可选脚本管理。程序本体无需安装 Rust、Flutter 或 Python。
+Windows 也可直接执行 `localsend-qr.exe context-menu install` 注册，或执行
+`localsend-qr.exe context-menu remove` 移除；PowerShell `.ps1` 入口保留供已允许脚本的环境使用。
 Ubuntu 桌面集成需要系统自带的 GNOME Terminal。
 
 开发：`cargo test -p localsend-qr`，`cargo build --release -p localsend-qr`。

@@ -1,6 +1,6 @@
 [package]
 name = "localsend-qr"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "Apache-2.0"
 description = "Portable QR sharing using the LocalSend Rust core"
@@ -19,4 +19,5 @@ walkdir = "2"
 zip = { version = "2", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
+winreg = "0.56"
 windows-sys = { version = "0.61", features = ["Win32_System_Console", "Win32_Foundation"] }

@@ -1,4 +1,4 @@
-LocalSend QR 0.1.0 — Windows x64 / Ubuntu 24 x64
+LocalSend QR 0.1.1 — Windows x64 / Ubuntu 24 x64
 
 中文说明
 ========
@@ -6,15 +6,17 @@ LocalSend QR 0.1.0 — Windows x64 / Ubuntu 24 x64
 解压到可长期保留的目录。手机无需 App，扫码后用系统浏览器下载。
 
 Windows 11 x64
-1. 在本目录打开 PowerShell，执行 .\Register-ContextMenu.ps1 注册右键。
+1. 双击 Register-ContextMenu.cmd 注册右键，无需修改 PowerShell 执行策略。
 2. 右键一个文件或文件夹 → 显示更多选项 → 通过二维码传送。
 3. 终端显示二维码；多网卡时先选择手机可以连接到的 Wi-Fi/以太网地址。
 4. 手机扫码，点击“下载文件”。请保持终端窗口开启。
-5. 关闭分享用 Ctrl+C。卸载右键执行 .\Remove-ContextMenu.ps1。
-6. 移动便携包后重新运行 Register-ContextMenu.ps1，更新调用路径。
-   可传入 -CorePath 'D:\其他目录\localsend-qr.exe' 指定核心位置。
-如果 PowerShell 提示下载的脚本被阻止，检查脚本内容后在文件属性中解除锁定。
-不需要修改系统执行策略。也可直接使用 EXE，无需注册任何右键菜单。
+5. 关闭分享用 Ctrl+C。卸载右键双击 Remove-ContextMenu.cmd。
+6. 移动便携包后重新运行 Register-ContextMenu.cmd，更新调用路径。
+也可以在终端执行 .\localsend-qr.exe context-menu install 注册，或
+.\localsend-qr.exe context-menu remove 移除菜单。
+可用 context-menu install --core-path 'D:\其他目录\localsend-qr.exe' 指定核心位置。
+原 .ps1 注册/移除入口保留供允许 PowerShell 脚本的环境使用。
+也可直接使用 EXE 分享文件，无需注册任何右键菜单。
 
 Ubuntu 24 x64（默认 GNOME Files / Nautilus）
 1. 在解压目录运行 bash register-context-menu.sh。
