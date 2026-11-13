@@ -2281,14 +2281,16 @@ dependencies = [
 
 [[package]]
 name = "localsend-qr"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "clap",
  "localsend",
  "qrcode",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "tempfile",
  "tokio",
  "uuid",

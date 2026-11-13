@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $taskBundle = Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot '../dist') -Directory | Where-Object Name -Like '*windows-x64' | Select-Object -First 1
 if (-not $taskBundle) { throw 'Portable bundle missing' }
 $taskScratch = Join-Path ([IO.Path]::GetTempPath()) ('localsend-qr-shell-' + [guid]::NewGuid().ToString('N'))
@@ -24,6 +24,15 @@ try {
             if ((Get-Item -LiteralPath $taskKey).GetValue('') -ne $taskExpected) { throw 'Wrong path after registration or relocation' }
         }
     }
+    foreach ($taskClass in @('Directory', 'Directory\Background')) {
+        $taskPlaceholder = if ($taskClass -eq 'Directory') { '%1/' } else { '%V/' }
+        $taskExpected = '"{0}" receive --pause-on-error -- "{1}"' -f (Join-Path $taskSecond 'localsend-qr.exe'), $taskPlaceholder
+        $taskMenu = 'HKCU:\Software\Classes\{0}\shell\LocalSendQRReceive' -f $taskClass
+        if ((Get-Item -LiteralPath $taskMenu).GetValue('') -ne '由二维码接收') { throw 'Wrong receive label' }
+        if ((Get-Item -LiteralPath ($taskMenu + '\command')).GetValue('') -ne $taskExpected) { throw 'Wrong receive directory argument' }
+    }
+    $taskBackground = '"{0}" share --pause-on-error -- "%V/"' -f (Join-Path $taskSecond 'localsend-qr.exe')
+    if ((Get-Item -LiteralPath 'HKCU:\Software\Classes\Directory\Background\shell\LocalSendQR\command').GetValue('') -ne $taskBackground) { throw 'Wrong current-folder send command' }
     if ((Get-ExecutionPolicy -Scope Process) -ne 'Restricted') { throw 'Registration changed execution policy' }
     & (Join-Path $taskSecond 'localsend-qr.exe') context-menu install --core-path (Join-Path $taskFirst 'localsend-qr.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Explicit core path registration failed' }
@@ -39,7 +48,8 @@ try {
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy $taskOldPolicy -Force
     $env:LOCALSEND_QR_NO_PAUSE = $taskOldPause
 }
-foreach ($taskClass in @('*', 'Directory')) {
+foreach ($taskClass in @('*', 'Directory', 'Directory\Background')) {
     if (Test-Path -LiteralPath ('HKCU:\Software\Classes\{0}\shell\LocalSendQR' -f $taskClass)) { throw 'Unregistration failed' }
+    if (Test-Path -LiteralPath ('HKCU:\Software\Classes\{0}\shell\LocalSendQRReceive' -f $taskClass)) { throw 'Receive unregistration failed' }
 }
 Write-Host 'PASS: CMD registration under Restricted policy, relocation, core override, standalone -File and removal.'

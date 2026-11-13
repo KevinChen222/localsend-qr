@@ -1,6 +1,8 @@
 mod archive;
+mod clipboard;
 #[cfg(windows)]
 mod context_menu;
+mod receive;
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
@@ -10,7 +12,7 @@ use localsend::http::server::web::{
 use localsend::http::server::{ServerHandle, start_with_port};
 use localsend::http::state::ClientInfo;
 use localsend::model::transfer::{FileContent, FileDto};
-use qrcode::{QrCode, render::unicode};
+use qrcode::{EcLevel, QrCode, render::unicode};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::io::{self, IsTerminal, Write};
@@ -22,7 +24,7 @@ use tokio::sync::{mpsc, oneshot};
 #[derive(Parser)]
 #[command(
     version,
-    about = "Share files to a phone browser over your LAN using a terminal QR code"
+    about = "Send or receive files with a phone browser over your LAN using a terminal QR code"
 )]
 struct Args {
     #[command(subcommand)]
@@ -31,6 +33,23 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Receive files from a phone browser into a folder
+    Receive {
+        #[arg(default_value = ".")]
+        directory: PathBuf,
+        #[arg(long)]
+        port: Option<u16>,
+        #[arg(long)]
+        ip: Option<Ipv4Addr>,
+        /// Stop after this many minutes; 0 disables the timer
+        #[arg(long)]
+        expires: Option<u32>,
+        #[arg(long)]
+        pause_on_error: bool,
+        /// Also print the full LAN URL below the QR code
+        #[arg(long)]
+        print_url: bool,
+    },
     /// Install or remove the current-user Explorer menu without PowerShell
     #[cfg(windows)]
     ContextMenu {
@@ -53,6 +72,9 @@ enum Command {
         /// Keep an Explorer-launched console open on errors
         #[arg(long)]
         pause_on_error: bool,
+        /// Also print the full LAN URL below the QR code
+        #[arg(long)]
+        print_url: bool,
     },
 }
 
@@ -119,12 +141,38 @@ fn settings() -> Result<Settings> {
 
 fn main() {
     let (pause_on_error, result) = match Args::parse().command {
+        Command::Receive {
+            directory,
+            port,
+            ip,
+            expires,
+            pause_on_error,
+            print_url,
+        } => (
+            pause_on_error,
+            tokio::runtime::Runtime::new()
+                .context("Cannot start runtime")
+                .and_then(|runtime| {
+                    runtime.block_on(async {
+                        let config = settings()?;
+                        receive::receive(
+                            directory,
+                            port.or(config.port).unwrap_or(53318),
+                            ip.or(config.ip),
+                            expires.or(config.expires_minutes).unwrap_or(60),
+                            print_url,
+                        )
+                        .await
+                    })
+                }),
+        ),
         Command::Share {
             paths,
             port,
             ip,
             expires,
             pause_on_error,
+            print_url,
         } => (
             pause_on_error,
             tokio::runtime::Runtime::new()
@@ -137,6 +185,7 @@ fn main() {
                             port.or(config.port).unwrap_or(53318),
                             ip.or(config.ip),
                             expires.or(config.expires_minutes).unwrap_or(60),
+                            print_url,
                         )
                         .await
                     })
@@ -225,9 +274,6 @@ async fn start(file: &archive::SharedFile, port: u16, secret: &str) -> Result<Ru
                     content_tx,
                     ..
                 } if requested == file_id => {
-                    println!(
-                        "Download requested by a browser (this does not confirm it has finished)."
-                    );
                     let _ = content_tx.send(FileContent::Path(path.clone()));
                 }
                 _ => {}
@@ -241,12 +287,27 @@ async fn start(file: &archive::SharedFile, port: u16, secret: &str) -> Result<Ru
     })
 }
 
-async fn share(paths: Vec<PathBuf>, port: u16, ip: Option<Ipv4Addr>, expires: u32) -> Result<()> {
-    println!("Preparing selected files; folders and multiple items become one ZIP...");
-    io::stdout().flush()?;
+async fn share(
+    paths: Vec<PathBuf>,
+    port: u16,
+    ip: Option<Ipv4Addr>,
+    expires: u32,
+    print_url: bool,
+) -> Result<()> {
     let file = tokio::task::spawn_blocking(move || archive::prepare(&paths)).await??;
     let secret = uuid::Uuid::new_v4().simple().to_string();
     let running = start(&file, port, &secret).await?;
+    run_window(running, &secret, ip, expires, false, print_url).await
+}
+
+async fn run_window(
+    running: RunningShare,
+    secret: &str,
+    ip: Option<Ipv4Addr>,
+    expires: u32,
+    receiving: bool,
+    print_url: bool,
+) -> Result<()> {
     let mut addresses: Vec<Ipv4Addr> = running
         .server
         .local_addresses()
@@ -300,7 +361,8 @@ async fn share(paths: Vec<PathBuf>, port: u16, ip: Option<Ipv4Addr>, expires: u3
     };
     let url = format!("http://{selected}:{}/#key={secret}", running.server.port());
     // Force a light quiet zone and dark modules, independent of terminal theme.
-    let qr = QrCode::new(url.as_bytes())?
+    // Keep the QR and its quiet zone within 21 terminal rows.
+    let qr = QrCode::with_error_correction_level(url.as_bytes(), EcLevel::L)?
         .render::<unicode::Dense1x2>()
         .quiet_zone(true)
         .build();
@@ -312,23 +374,25 @@ async fn share(paths: Vec<PathBuf>, port: u16, ip: Option<Ipv4Addr>, expires: u3
     } else {
         qr
     };
-    let display_name: String = file
-        .name
-        .chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
-        .collect();
-    println!("\nLocalSend QR | {display_name}\n\n{qr}\n\n{url}\n");
-    println!("Scan with the phone camera and open in Safari/Chrome. No phone app needed.");
-    println!(
-        "HTTP / unencrypted. Share only on a trusted LAN. Anyone with this link can download."
-    );
-    if expires > 0 {
-        println!("Sharing expires in {expires} minutes. Use --expires 0 for no timer.");
+    let copy_url = url.clone();
+    let copied = tokio::task::spawn_blocking(move || clipboard::copy(&copy_url))
+        .await?
+        .is_ok();
+    println!("{qr}");
+    if print_url {
+        println!("{url}");
     }
-    println!(
-        "Keep this window open. Ctrl+C stops sharing. Downloads may need a browser confirmation."
-    );
-    io::stdout().flush()?;
+    let direction = if receiving {
+        "扫码发送到电脑"
+    } else {
+        "扫码下载到手机"
+    };
+    let copy_status = if copied {
+        "链接已复制"
+    } else {
+        "剪贴板不可用"
+    };
+    set_status(&format!("{direction} · {copy_status} · Ctrl+C 关闭"));
     let timer = async {
         if expires == 0 {
             std::future::pending::<()>().await;
@@ -337,19 +401,44 @@ async fn share(paths: Vec<PathBuf>, port: u16, ip: Option<Ipv4Addr>, expires: u3
         }
     };
     tokio::select! {
-        _ = tokio::signal::ctrl_c() => println!("\nStopping sharing..."),
-        _ = timer => println!("\nShare expired; stopping active downloads..."),
+        _ = tokio::signal::ctrl_c() => {},
+        _ = timer => {},
     }
     let _ = running.stop.send(());
     running.server.wait_stopped().await;
     running.events.abort();
-    drop(file);
+    let _ = running.events.await;
+    println!();
     Ok(())
+}
+
+fn set_status(message: &str) {
+    if qr_colors_enabled() {
+        print!("\r\x1b[2K{message}");
+    } else if io::stdout().is_terminal() {
+        print!("\r{message: <70}");
+    } else {
+        println!("{message}");
+    }
+    let _ = io::stdout().flush();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn qr_and_status_fit_a_standard_terminal() -> Result<()> {
+        let url = "http://192.168.255.255:65535/#key=0123456789abcdef0123456789abcdef";
+        let qr = QrCode::with_error_correction_level(url.as_bytes(), EcLevel::L)?
+            .render::<unicode::Dense1x2>()
+            .quiet_zone(true)
+            .build();
+        assert!(qr.lines().count() <= 21);
+        assert!(qr.lines().all(|line| line.chars().count() <= 80));
+        Ok(())
+    }
+
     #[tokio::test]
     async fn browser_flow_requires_key_and_streams_exact_bytes() -> Result<()> {
         let temp = tempfile::tempdir()?;

@@ -51,6 +51,8 @@ jobs:
         run: python qr/pack.py ${{ matrix.platform }}
       - name: End-to-end CLI smoke test
         run: python qr/smoke.py
+      - name: Receive and clipboard smoke test
+        run: python qr/receive-smoke.py
       - name: Windows right-click integration and relocation
         if: matrix.platform == 'windows-x64'
         run: powershell.exe -NoLogo -NoProfile -NonInteractive -File qr/test-windows-integration.ps1
@@ -93,9 +95,10 @@ jobs:
           cat > notes.md <<'NOTES'
           基于 LocalSend Rust 核心的二维码传送便携版。
 
-          - Windows 11 x64：下载 windows-x64.zip，解压后双击 Register-ContextMenu.cmd，无需更改 PowerShell 执行策略；右键 → 显示更多选项 → 通过二维码传送。
-          - Ubuntu 24 x64：下载 ubuntu24-x64.tar.gz，解压后运行 bash register-context-menu.sh；GNOME Files 右键 → 脚本 → 通过二维码传送。
-          - 手机无需安装 App，扫码后在系统浏览器点击下载。文件夹以 ZIP 接收。
+          - Windows 11 x64：下载 windows-x64.zip，解压后双击 Register-ContextMenu.cmd，无需更改 PowerShell 执行策略；右键 → 显示更多选项 → 由二维码发送 / 由二维码接收。
+          - Ubuntu 24 x64：下载 ubuntu24-x64.tar.gz，解压后运行 bash register-context-menu.sh；GNOME Files 右键 → 脚本 → 由二维码发送 / 由二维码接收。
+          - 手机无需安装 App：扫码下载电脑文件，或选择手机文件发送到电脑当前接收目录。
+          - 终端只显示二维码和一行状态，自动复制内网链接；Linux 剪贴板需 wl-clipboard、xclip 或 xsel。
           - 移动便携目录后重新运行注册脚本更新路径。Ctrl+C 停止分享。
           - HTTP 未加密；限可信局域网使用。默认分享 60 分钟，--expires 0 可取消时限。
           - Windows 包未进行代码签名。Ubuntu 包在 Ubuntu 24.04 CI 构建和测试；请在实际双系统及手机上验证网络连通性。

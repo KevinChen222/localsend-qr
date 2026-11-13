@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>LocalSend QR · 发送到电脑</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f7f6;color:#173a35;font:16px system-ui,sans-serif;min-height:100vh;display:grid;place-items:center;padding:24px}main{width:min(100%,480px);padding:28px;background:white;border:1px solid #dbe7e4;border-radius:24px;box-shadow:0 18px 60px #163b3410}small,.muted{color:#54726c}h1{font-size:28px;letter-spacing:-1px}p{line-height:1.7;overflow-wrap:anywhere}input{display:block;max-width:100%;margin:20px 0}button{font:inherit;border:0;background:#176a57;color:white;padding:14px 20px;border-radius:12px;font-weight:650;cursor:pointer}button:disabled{opacity:.5;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid #34b896;outline-offset:4px}#cancel{background:#e6eeeb;color:#173a35;margin-left:8px}progress{width:100%;height:12px;accent-color:#176a57}ul{padding-left:22px;max-height:180px;overflow:auto;overflow-wrap:anywhere;font-size:14px}footer{margin-top:24px;padding-top:18px;border-top:1px solid #e8efed;font-size:13px;color:#647a75}
+</style></head><body><main><small>LOCALSEND QR · 局域网传送</small><h1>发送文件到电脑</h1>
+<p>选择手机上的文件，发送到电脑当前的接收文件夹。</p>
+<label for="files">选择文件（支持多选）</label><input id="files" type="file" multiple>
+<ul id="list"></ul><p id="status" role="status" aria-live="polite">请选择要发送的文件。</p>
+<progress id="progress" value="0" max="100" aria-label="上传进度"></progress>
+<p><button id="send" disabled>发送到电脑</button><button id="cancel" hidden>取消</button></p>
+<p class="muted">请保持电脑接收窗口开启，传输时保持此页面在前台。重名文件会自动改名，不会覆盖电脑上的文件。</p>
+<footer>文件直接从手机传到电脑 · HTTP 未加密<br>无需安装 App，请使用 Safari、Chrome 等系统浏览器。</footer></main>
+<script>
+'use strict';
+const input = document.getElementById('files');
+const send = document.getElementById('send');
+const cancel = document.getElementById('cancel');
+const status = document.getElementById('status');
+const progress = document.getElementById('progress');
+const key = new URLSearchParams(location.hash.slice(1)).get('key');
+let busy = false, cancelled = false, session = null, request = null, controller = null;
+if (!key) { status.textContent = '链接缺少接收凭证，请重新扫描电脑上的二维码。'; input.disabled = true; }
+input.addEventListener('change', () => {
+ const list = document.getElementById('list'); list.replaceChildren();
+ for (const file of input.files) {
+  const item = document.createElement('li');
+  item.textContent = file.name + ' · ' + (file.size / 1048576).toFixed(2) + ' MB'; list.appendChild(item);
+ }
+ send.disabled = !key || input.files.length === 0;
+ progress.value = 0; status.textContent = '已选择 ' + input.files.length + ' 个文件。';
+});
+function upload(file, query, completed, total) {
+ return new Promise((resolve, reject) => {
+  const xhr = request = new XMLHttpRequest();
+  xhr.open('POST', '/api/localsend/v2/upload?' + query);
+  xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+  xhr.upload.onprogress = event => {
+   progress.value = total ? (completed + event.loaded) * 100 / total : 0;
+   status.textContent = '正在发送：' + file.name + ' · ' + Math.floor(progress.value) + '%';
+  };
+  xhr.onload = () => xhr.status === 200 ? resolve() : reject(new Error('文件保存失败，请检查电脑剩余空间或重新扫码。'));
+  xhr.onerror = () => reject(new Error('连接中断，请检查网络，保持电脑接收窗口开启。'));
+  xhr.onabort = () => reject(new Error('已取消；已完成的文件仍保留在电脑上。'));
+  xhr.send(file);
+ });
+}
+async function cancelSession() {
+ if (session) {
+  const id = session; session = null;
+  try { await fetch('/api/localsend/v2/cancel?sessionId=' + encodeURIComponent(id), {method:'POST', keepalive:true}); } catch (_) {}
+ }
+}
+cancel.addEventListener('click', () => {
+ cancelled = true; cancel.disabled = true;
+ if (controller) controller.abort();
+ if (request) request.abort();
+});
+window.addEventListener('pagehide', () => { if (session) void cancelSession(); });
+send.addEventListener('click', async () => {
+ if (busy || !input.files.length || !key) return;
+ busy = true; cancelled = false; send.disabled = true; input.disabled = true;
+ cancel.hidden = false; cancel.disabled = false; progress.value = 0;
+ const selected = Array.from(input.files), files = {};
+ const total = selected.reduce((size, file) => size + file.size, 0);
+ let completed = 0, count = 0;
+ selected.forEach((file, index) => {
+  const id = String(index);
+  files[id] = {id, fileName:file.name, size:file.size, fileType:file.type || 'application/octet-stream'};
+ });
+ try {
+  status.textContent = '正在连接电脑…'; controller = new AbortController();
+  const response = await fetch('/api/localsend/v2/prepare-upload?pin=' + encodeURIComponent(key), {
+   method:'POST', headers:{'Content-Type':'application/json'}, signal:controller.signal,
+   body:JSON.stringify({info:{alias:'手机浏览器', version:'2.2', fingerprint:'qr-browser', port:0, protocol:'http', download:false}, files})
+  });
+  if (!response.ok) {
+   const messages = {401:'接收凭证不正确，请重新扫码。', 403:'文件名不兼容 Windows，请修改文件名后重试。',
+    409:'电脑正接收另一批文件，请稍后重试。', 429:'验证尝试过多，请重启电脑接收窗口并重新扫码。'};
+   throw new Error(messages[response.status] || '无法连接接收窗口，请重新扫码。');
+  }
+  const data = await response.json(); session = data.sessionId;
+  for (let index = 0; index < selected.length; index++) {
+   if (cancelled) throw new Error('已取消发送。');
+   const id = String(index), file = selected[index];
+   if (!data.files || !data.files[id]) throw new Error('电脑未接受全部文件，请重新扫码。');
+   const query = new URLSearchParams({sessionId:session, fileId:id, token:data.files[id]});
+   await upload(file, query.toString(), completed, total);
+   completed += file.size; count++;
+  }
+  session = null; progress.value = 100;
+  status.textContent = '发送完成！' + count + ' 个文件已保存到电脑的接收文件夹。';
+ } catch (error) {
+  status.textContent = (cancelled ? '已取消发送。' : (error.message || '发送失败，请检查网络。')) + ' 已完成 ' + count + ' 个文件。';
+ } finally {
+  await cancelSession(); request = null; controller = null; busy = false;
+  send.disabled = false; input.disabled = false; cancel.hidden = true;
+ }
+});
+</script></body></html>

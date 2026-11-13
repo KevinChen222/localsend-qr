@@ -1,12 +1,16 @@
 # LocalSend QR — 便携二维码传送
 
 基于 LocalSend Rust 核心的独立扩展。电脑选中文件/文件夹，右键启动终端二维码；
-手机扫码后在浏览器下载，无需安装 LocalSend。
+手机扫码后在浏览器下载或选择文件发回电脑，无需安装 LocalSend。
 
 - **Windows 11 x64**：解压便携 ZIP，双击 `Register-ContextMenu.cmd`，无需修改 PowerShell 执行策略。
-  右键单个文件或文件夹 → 显示更多选项 → 通过二维码传送。
+  右键单个文件或文件夹 → 显示更多选项 → 由二维码发送。
 - **Ubuntu 24 x64**：解压便携 tar.gz，运行 `bash register-context-menu.sh`。
-  GNOME Files / Nautilus 中右键 → 脚本 → 通过二维码传送。
+  GNOME Files / Nautilus 中右键 → 脚本 → 由二维码发送。
+- **手机发送到电脑**：右键目标文件夹选择“由二维码接收”；Windows 也支持文件夹空白处。
+  手机扫码、选择文件并发送，自动保存到该文件夹；重名自动改名，未完成文件自动清理。
+- **简洁窗口与剪贴板**：二维码加一行状态，自动复制完整内网传输网址，方便手机同步剪贴板。
+  Linux Wayland 需 `wl-clipboard`，X11 需 `xclip` 或 `xsel`；用 `--print-url` 可显示网址。
 - 移动目录后重新运行注册脚本即可更新调用路径；两个平台均提供移除脚本。
 - 单文件直接传输；文件夹和多项打为 ZIP（保留空目录，支持 ZIP64）。
 - 分享使用每次随机凭证，默认 60 分钟过期，Ctrl+C 停止。HTTP 未加密，仅限可信局域网。
@@ -16,6 +20,8 @@
 [完整使用说明](qr/portable/README.txt)
 
 ```text
+localsend-qr receive -- DIRECTORY
+localsend-qr receive --print-url -- DIRECTORY
 localsend-qr share -- FILE_OR_FOLDER
 localsend-qr share --port 0 --expires 0 -- FILE1 FILE2 FOLDER
 localsend-qr share --ip 192.168.1.20 -- FILE

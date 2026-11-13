@@ -14,7 +14,7 @@ import urllib.parse
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
-exe = root / "target/release" / ("localsend-qr.exe" if os.name == "nt" else "localsend-qr")
+exe = Path(os.environ.get("LOCALSEND_QR_EXE", root / "target/release" / ("localsend-qr.exe" if os.name == "nt" else "localsend-qr")))
 with tempfile.TemporaryDirectory() as work:
     folder = Path(work) / "测试 folder"
     folder.mkdir()
@@ -22,7 +22,7 @@ with tempfile.TemporaryDirectory() as work:
     data = bytes(range(256)) * 4000
     (folder / "payload.bin").write_bytes(data)
     output = []
-    process = subprocess.Popen([str(exe), "share", "--port", "0", "--expires", "1", "--", str(folder)],
+    process = subprocess.Popen([str(exe), "share", "--port", "0", "--expires", "1", "--print-url", "--", str(folder)],
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                text=True, encoding="utf-8", errors="replace")
     def read_output():
