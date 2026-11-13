@@ -1,6 +1,7 @@
 //! Current-user Explorer integration, independent of PowerShell execution policy.
 use anyhow::{Context, Result, bail};
 use std::path::PathBuf;
+use windows_sys::Win32::UI::Shell::{SHCNE_ASSOCCHANGED, SHCNF_FLUSH, SHChangeNotify};
 use winreg::{HKCU, RegKey};
 
 const CLASSES: [&str; 3] = ["*", "Directory", r"Directory\Background"];
@@ -13,6 +14,7 @@ pub fn install(core_path: Option<PathBuf>) -> Result<()> {
     let path = core.to_str().context("Core path is not valid Unicode")?;
     let (classes, _) = HKCU.create_subkey(r"Software\Classes")?;
     install_entries(&classes, path)?;
+    notify_explorer();
     println!("Registered for the current user: {path}");
     println!("Windows 11: right-click > Show more options > 由二维码发送 / 由二维码接收");
     println!("Run Register-ContextMenu.cmd again after moving the portable folder.");
@@ -44,7 +46,17 @@ fn install_entries(classes: &RegKey, path: &str) -> Result<()> {
             let (key, _) = classes.create_subkey(format!(r"{class}\shell\{verb}"))?;
             key.set_value("", &label)?;
             key.set_value("Icon", &format!("\"{path}\",0"))?;
-            key.set_value("MultiSelectModel", &"Single")?;
+            if class == r"Directory\Background" {
+                // Background menus have no selected item. "Single" makes
+                // Explorer hide the verb; remove it on upgrades as well.
+                match key.delete_value("MultiSelectModel") {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error.into()),
+                }
+            } else {
+                key.set_value("MultiSelectModel", &"Single")?;
+            }
             let (command_key, _) = key.create_subkey("command")?;
             command_key.set_value("", &command)?;
             let actual: String = command_key.get_value("")?;
@@ -59,8 +71,22 @@ fn install_entries(classes: &RegKey, path: &str) -> Result<()> {
 pub fn remove() -> Result<()> {
     let (classes, _) = HKCU.create_subkey(r"Software\Classes")?;
     remove_entries(&classes)?;
+    notify_explorer();
     println!("LocalSend QR context menu removed for the current user.");
     Ok(())
+}
+
+fn notify_explorer() {
+    // Association changes carry no item pointers. Flush before returning so
+    // already-open Explorer windows can refresh their cached menus.
+    unsafe {
+        SHChangeNotify(
+            SHCNE_ASSOCCHANGED as i32,
+            SHCNF_FLUSH,
+            std::ptr::null(),
+            std::ptr::null(),
+        );
+    }
 }
 
 fn remove_entries(classes: &RegKey) -> Result<()> {
@@ -86,6 +112,10 @@ mod tests {
         let scratch = format!(r"Software\LocalSendQR-Test-{}", uuid::Uuid::new_v4());
         let (root, _) = HKCU.create_subkey(&scratch)?;
         let result = (|| -> Result<()> {
+            for verb in ["LocalSendQR", "LocalSendQRReceive"] {
+                let (key, _) = root.create_subkey(format!(r"Directory\Background\shell\{verb}"))?;
+                key.set_value("MultiSelectModel", &"Single")?;
+            }
             for executable in [
                 r"C:\中文 first folder\localsend-qr.exe",
                 r"C:\moved [folder] & space\localsend-qr.exe",
@@ -118,6 +148,16 @@ mod tests {
                 ] {
                     let key = root.open_subkey(format!(r"{class}\shell\{verb}"))?;
                     assert_eq!(key.get_value::<String, _>("")?, label);
+                    if class == r"Directory\Background" {
+                        assert_eq!(
+                            key.get_value::<String, _>("MultiSelectModel")
+                                .unwrap_err()
+                                .kind(),
+                            std::io::ErrorKind::NotFound
+                        );
+                    } else {
+                        assert_eq!(key.get_value::<String, _>("MultiSelectModel")?, "Single");
+                    }
                     let command = key.open_subkey("command")?.get_value::<String, _>("")?;
                     assert_eq!(
                         command,

@@ -18,6 +18,8 @@ try {
     foreach ($taskLocation in @($taskFirst, $taskSecond)) {
         & (Join-Path $taskLocation 'Register-ContextMenu.cmd')
         if ($LASTEXITCODE -ne 0) { throw 'CMD registration failed under Restricted policy' }
+        & python (Join-Path $PSScriptRoot 'test-windows-background.py') $taskLocation
+        if ($LASTEXITCODE -ne 0) { throw 'Folder background menu is hidden' }
         $taskExpected = '"{0}" share --pause-on-error -- "%1"' -f (Join-Path $taskLocation 'localsend-qr.exe')
         foreach ($taskClass in @('*', 'Directory')) {
             $taskKey = 'HKCU:\Software\Classes\{0}\shell\LocalSendQR\command' -f $taskClass

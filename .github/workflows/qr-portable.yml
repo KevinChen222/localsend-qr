@@ -95,6 +95,8 @@ jobs:
           cat > notes.md <<'NOTES'
           基于 LocalSend Rust 核心的二维码传送便携版。
 
+          本次修复：Windows 文件夹空白处的两个二维码入口被单选限制隐藏；升级注册会清理旧限制并通知资源管理器刷新菜单。
+
           - Windows 11 x64：下载 windows-x64.zip，解压后双击 Register-ContextMenu.cmd，无需更改 PowerShell 执行策略；右键 → 显示更多选项 → 由二维码发送 / 由二维码接收。
           - Ubuntu 24 x64：下载 ubuntu24-x64.tar.gz，解压后运行 bash register-context-menu.sh；GNOME Files 右键 → 脚本 → 由二维码发送 / 由二维码接收。
           - 手机无需安装 App：扫码下载电脑文件，或选择手机文件发送到电脑当前接收目录。

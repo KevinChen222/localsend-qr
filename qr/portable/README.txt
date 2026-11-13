@@ -1,4 +1,4 @@
-LocalSend QR 0.2.0 — Windows x64 / Ubuntu 24 x64
+LocalSend QR 0.2.1 — Windows x64 / Ubuntu 24 x64
 
 中文说明
 ========
