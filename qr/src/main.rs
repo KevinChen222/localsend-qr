@@ -2,6 +2,7 @@ mod archive;
 mod clipboard;
 #[cfg(windows)]
 mod context_menu;
+mod port;
 mod receive;
 
 use anyhow::{Context, Result, bail};
@@ -37,6 +38,7 @@ enum Command {
     Receive {
         #[arg(default_value = ".")]
         directory: PathBuf,
+        /// Preferred TCP port; falls back to a free port if unavailable. 0 selects automatically
         #[arg(long)]
         port: Option<u16>,
         #[arg(long)]
@@ -60,7 +62,7 @@ enum Command {
     Share {
         #[arg(required = true, num_args = 1..)]
         paths: Vec<PathBuf>,
-        /// TCP port; 0 chooses a free port. Default: settings.json or 53318
+        /// Preferred TCP port; falls back to a free port if unavailable. 0 selects automatically
         #[arg(long)]
         port: Option<u16>,
         /// QR address when there are multiple network adapters
@@ -217,6 +219,14 @@ struct RunningShare {
 }
 
 async fn start(file: &archive::SharedFile, port: u16, secret: &str) -> Result<RunningShare> {
+    port::start(port, |port| start_on_port(file, port, secret)).await
+}
+
+async fn start_on_port(
+    file: &archive::SharedFile,
+    port: u16,
+    secret: &str,
+) -> Result<RunningShare> {
     let file_id = uuid::Uuid::new_v4().to_string();
     let files = HashMap::from([(
         file_id.clone(),
@@ -259,9 +269,7 @@ async fn start(file: &archive::SharedFile, port: u16, secret: &str) -> Result<Ru
         stop_rx,
     )
     .await
-    .with_context(|| {
-        format!("Cannot listen on port {port}. Close another sharing window or use --port 0")
-    })?;
+    .with_context(|| format!("Cannot listen on TCP port {port}"))?;
     let path = file.path.clone();
     let events = tokio::spawn(async move {
         while let Some(event) = event_rx.recv().await {
@@ -445,7 +453,10 @@ mod tests {
         let path = temp.path().join("中文 test.txt");
         std::fs::write(&path, b"real file contents\0")?;
         let file = archive::prepare(&[path])?;
-        let running = start(&file, 0, "secret-test-key").await?;
+        let occupied = tokio::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0)).await?;
+        let preferred_port = occupied.local_addr()?.port();
+        let running = start(&file, preferred_port, "secret-test-key").await?;
+        assert_ne!(running.server.port(), preferred_port);
         let base = format!("http://127.0.0.1:{}", running.server.port());
         let client = localsend::reqwest::Client::builder().no_proxy().build()?;
         assert!(

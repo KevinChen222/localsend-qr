@@ -39,6 +39,10 @@ pub(super) async fn start(
     port: u16,
     secret: &str,
 ) -> Result<super::RunningShare> {
+    super::port::start(port, |port| start_on_port(directory.clone(), port, secret)).await
+}
+
+async fn start_on_port(directory: PathBuf, port: u16, secret: &str) -> Result<super::RunningShare> {
     let (event_tx, mut event_rx) = mpsc::channel(32);
     let (stop, stop_rx) = oneshot::channel();
     let server = start_with_port(
@@ -68,9 +72,7 @@ pub(super) async fn start(
         stop_rx,
     )
     .await
-    .with_context(|| {
-        format!("Cannot listen on port {port}. Close another QR window or use --port 0")
-    })?;
+    .with_context(|| format!("Cannot listen on TCP port {port}"))?;
     let events = tokio::spawn(async move {
         // Aborting the event loop also drops its upload tasks and temporary files.
         let mut uploads = JoinSet::new();
@@ -274,7 +276,10 @@ mod tests {
     #[tokio::test]
     async fn browser_upload_auth_multiple_files_collisions_and_failures() -> Result<()> {
         let temp = tempfile::tempdir()?;
-        let running = start(temp.path().into(), 0, "test-key").await?;
+        let occupied = tokio::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0)).await?;
+        let preferred_port = occupied.local_addr()?.port();
+        let running = start(temp.path().into(), preferred_port, "test-key").await?;
+        assert_ne!(running.server.port(), preferred_port);
         let base = format!("http://127.0.0.1:{}", running.server.port());
         let client = Client::builder().no_proxy().build()?;
         let page = client.get(&base).send().await?.text().await?;

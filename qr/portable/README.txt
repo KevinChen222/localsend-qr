@@ -1,4 +1,4 @@
-LocalSend QR 0.2.1 — Windows x64 / Ubuntu 24 x64
+LocalSend QR 0.2.2 — Windows x64 / Ubuntu 24 x64
 
 中文说明
 ========
@@ -54,7 +54,8 @@ Windows: .\localsend-qr.exe receive -- 'D:\接收目录'
 网卡:    ./localsend-qr share --ip 192.168.1.20 -- FILE
 时限:    ./localsend-qr share --expires 0 -- FILE （不自动过期）
 配置:    EXE/核心程序旁的 settings.json；命令行参数优先。
-默认端口 53318，避免与普通 LocalSend 的 53317 冲突。默认分享 60 分钟。
+首选端口 53318；被系统保留或其他窗口占用时自动选择空闲端口。
+二维码和剪贴板始终使用实际端口，支持同时打开多个传输窗口。默认分享 60 分钟。
 默认时限到达会终止进行中的传输；大文件可提高时限或用 --expires 0。
 
 行为与网络

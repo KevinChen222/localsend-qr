@@ -15,6 +15,7 @@ import zipfile
 
 root = Path(__file__).resolve().parent.parent
 exe = Path(os.environ.get("LOCALSEND_QR_EXE", root / "target/release" / ("localsend-qr.exe" if os.name == "nt" else "localsend-qr")))
+preferred_port = os.environ.get("LOCALSEND_QR_TEST_PORT", "0")
 with tempfile.TemporaryDirectory() as work:
     folder = Path(work) / "测试 folder"
     folder.mkdir()
@@ -22,7 +23,7 @@ with tempfile.TemporaryDirectory() as work:
     data = bytes(range(256)) * 4000
     (folder / "payload.bin").write_bytes(data)
     output = []
-    process = subprocess.Popen([str(exe), "share", "--port", "0", "--expires", "1", "--print-url", "--", str(folder)],
+    process = subprocess.Popen([str(exe), "share", "--port", preferred_port, "--expires", "1", "--print-url", "--", str(folder)],
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                text=True, encoding="utf-8", errors="replace")
     def read_output():

@@ -13,6 +13,7 @@ import urllib.parse
 
 root = Path(__file__).resolve().parent.parent
 exe = Path(os.environ.get("LOCALSEND_QR_EXE", root / "target/release" / ("localsend-qr.exe" if os.name == "nt" else "localsend-qr")))
+preferred_port = os.environ.get("LOCALSEND_QR_TEST_PORT", "0")
 
 
 def windows_clipboard():
@@ -53,7 +54,7 @@ with tempfile.TemporaryDirectory() as work:
         helper.chmod(0o755)
         env.update(PATH=str(mock) + os.pathsep + env["PATH"], WAYLAND_DISPLAY="qr-test", QR_TEST_CLIPBOARD=str(clipboard))
     previous_clipboard = windows_clipboard() if os.name == "nt" else ""
-    process = subprocess.Popen([str(exe), "receive", "--port", "0", "--expires", "1", "--", str(destination)],
+    process = subprocess.Popen([str(exe), "receive", "--port", preferred_port, "--expires", "1", "--", str(destination)],
                                env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                text=True, encoding="utf-8", errors="replace")
     output = []
